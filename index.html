@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GST Reconciliation Pro - Books vs GSTR-2B ITC Automation Engine</title>
+  <meta name="description" content="Enterprise Indian GST Input Tax Credit (ITC) reconciliation tool comparing Purchase Register, Journal Register, Debit Notes, and 180-Day Payment Register against full-year GSTR-2B statements.">
+  <link rel="stylesheet" href="styles/main.css">
+  
+  <!-- Vendor Libraries (Self-contained offline first with CDN fallback) -->
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="vendor/lucide.min.js"></script>
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- TOP NAVBAR -->
+    <header class="top-navbar">
+      <div class="brand-wrapper">
+        <div class="brand-logo">
+          <i data-lucide="scale" style="width:24px;height:24px"></i>
+        </div>
+        <div class="brand-info">
+          <h1>GST Reconciliation Engine <span class="brand-badge">PRO v2.4</span></h1>
+          <p class="brand-subtitle">Books vs GSTR-2B Input Tax Credit (ITC) Statutory Audit System</p>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="downloadTemplateBtn" class="btn btn-outline" title="Download Excel template for Books registers">
+          <i data-lucide="download" style="width:16px;height:16px"></i> Template Format
+        </button>
+        <button id="loadDemoDataBtn" class="btn btn-secondary" title="Load realistic Full Year 2023-24 dataset">
+          <i data-lucide="sparkles" style="width:16px;height:16px;color:#A5B4FC"></i> Load Sample FY 23-24
+        </button>
+        <button id="exportExcelBtn" class="btn btn-emerald" title="Export full multi-sheet reconciliation Excel report">
+          <i data-lucide="file-spreadsheet" style="width:16px;height:16px"></i> Export Excel Report
+        </button>
+      </div>
+    </header>
+
+    <!-- WORKSPACE INGESTION SECTION (BOOKS vs GSTR-2B) -->
+    <section class="upload-grid" aria-label="File Ingestion Zone">
+      
+      <!-- 1. Books of Accounts Panel -->
+      <div class="recon-card" id="booksCard">
+        <div class="card-header-bar">
+          <div class="card-title">
+            <i data-lucide="book-open" style="width:20px;height:20px;color:#06B6D4"></i>
+            <span>1. Client Books of Accounts</span>
+          </div>
+          <span class="badge-source books">Books (Tally / SAP / ERP)</span>
+        </div>
+
+        <div class="dropzone" id="booksDropzone" role="button" tabindex="0">
+          <input type="file" id="booksFileInput" accept=".xlsx, .xls, .csv, .json" multiple>
+          <div class="dropzone-icon">
+            <i data-lucide="folder-up" style="width:40px;height:40px"></i>
+          </div>
+          <div class="dropzone-title">Upload Books Registers (Excel / CSV)</div>
+          <div class="dropzone-sub">Upload single multi-sheet workbook or individual registers</div>
+        </div>
+
+        <!-- Sub-registers Status Pill Grid -->
+        <div class="books-sub-registers">
+          <div class="sub-reg-card active">
+            <div class="sub-reg-title">Purchase Register</div>
+            <div class="sub-reg-count" id="badgePrCount">0 Invoices</div>
+          </div>
+          <div class="sub-reg-card active">
+            <div class="sub-reg-title">Journal Register</div>
+            <div class="sub-reg-count" id="badgeJvCount">0 Entries</div>
+          </div>
+          <div class="sub-reg-card active">
+            <div class="sub-reg-title">Debit Notes</div>
+            <div class="sub-reg-count" id="badgeDnCount">0 Notes</div>
+          </div>
+          <div class="sub-reg-card active">
+            <div class="sub-reg-title">180-Day Payments</div>
+            <div class="sub-reg-count" id="badgePayCount">0 Records</div>
+          </div>
+        </div>
+
+        <div class="file-list" id="booksFileList"></div>
+      </div>
+
+      <!-- 2. GSTR-2B Statement Panel -->
+      <div class="recon-card" id="gstr2bCard">
+        <div class="card-header-bar">
+          <div class="card-title">
+            <i data-lucide="shield-check" style="width:20px;height:20px;color:#8B5CF6"></i>
+            <span>2. Client GSTR-2B Statements</span>
+          </div>
+          <span class="badge-source gst">GSTN Portal</span>
+        </div>
+
+        <div class="dropzone" id="gstr2bDropzone" role="button" tabindex="0">
+          <input type="file" id="gstr2bFileInput" accept=".xlsx, .xls, .json" multiple>
+          <div class="dropzone-icon">
+            <i data-lucide="cloud-download" style="width:40px;height:40px;color:#8B5CF6"></i>
+          </div>
+          <div class="dropzone-title">Upload GSTR-2B (Excel or JSON)</div>
+          <div class="dropzone-sub">Consolidated full-year Excel or select all 12 monthly files (Apr - Mar)</div>
+        </div>
+
+        <div class="file-list" id="gstr2bFileList" style="margin-top: 38px;"></div>
+      </div>
+
+    </section>
+
+    <!-- RECONCILIATION PARAMETERS BANNER -->
+    <section class="action-banner">
+      <div class="banner-left">
+        <div class="banner-icon">
+          <i data-lucide="sliders" style="width:22px;height:22px"></i>
+        </div>
+        <div class="banner-text">
+          <h3>Statutory Matching Rules & Section 16(2)(aa) Verification</h3>
+          <p>Multi-tier matching: Normalized GSTIN, Invoice Numbers, Value Tolerance & 180-day Rule 37 compliance.</p>
+        </div>
+      </div>
+      <div class="banner-right">
+        <div class="tolerance-control">
+          <span>Tolerance Threshold:</span>
+          <select id="toleranceSelect">
+            <option value="0">Strict Match (₹0.00)</option>
+            <option value="1.0" selected>Standard Round-off (± ₹1.00)</option>
+            <option value="5.0">Lenient (± ₹5.00)</option>
+            <option value="10.0">Commercial (± ₹10.00)</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOP KPI METRICS (EXECUTIVE SUMMARY) -->
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+      
+      <!-- 1. Books Total ITC -->
+      <div class="kpi-card books">
+        <div class="kpi-top">
+          <span class="kpi-label">ITC Claimed in Books</span>
+          <div class="kpi-icon-wrap" style="color:#06B6D4">
+            <i data-lucide="receipt" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiBooksTax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span>Purchase Register Gross ITC</span>
+        </div>
+      </div>
+
+      <!-- 2. GSTR-2B Total ITC -->
+      <div class="kpi-card gstr2b">
+        <div class="kpi-top">
+          <span class="kpi-label">ITC Available in GSTR-2B</span>
+          <div class="kpi-icon-wrap" style="color:#8B5CF6">
+            <i data-lucide="check-check" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpi2bTax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span>Auto-drafted Portal Statements</span>
+        </div>
+      </div>
+
+      <!-- 3. Net Difference / Variance -->
+      <div class="kpi-card diff">
+        <div class="kpi-top">
+          <span class="kpi-label">Net Difference (Variance)</span>
+          <div class="kpi-icon-wrap" style="color:#EF4444">
+            <i data-lucide="arrow-left-right" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiNetDiff">₹0.00</div>
+        <div class="kpi-subtext">
+          <span id="kpiDiffPill" class="kpi-pill pill-red">Evaluating...</span>
+        </div>
+      </div>
+
+      <!-- 4. Clean Matched ITC -->
+      <div class="kpi-card matched">
+        <div class="kpi-top">
+          <span class="kpi-label">Clean Matched ITC</span>
+          <div class="kpi-icon-wrap" style="color:#10B981">
+            <i data-lucide="shield-check" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiMatchedTax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span class="kpi-pill pill-green">Safe for GSTR-3B Claim</span>
+        </div>
+      </div>
+
+      <!-- 5. Missing in 2B (High Disallowance Risk) -->
+      <div class="kpi-card missing2b">
+        <div class="kpi-top">
+          <span class="kpi-label">Missing in 2B (Vendor Default)</span>
+          <div class="kpi-icon-wrap" style="color:#EF4444">
+            <i data-lucide="alert-octagon" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiMissing2bTax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span class="kpi-pill pill-red">Sec 16(2)(aa) Notice Risk</span>
+        </div>
+      </div>
+
+      <!-- 6. Missing in Books (Unclaimed Opportunity) -->
+      <div class="kpi-card missingbooks">
+        <div class="kpi-top">
+          <span class="kpi-label">Unclaimed ITC (In 2B Only)</span>
+          <div class="kpi-icon-wrap" style="color:#8B5CF6">
+            <i data-lucide="trending-up" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiMissingBooksTax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span class="kpi-pill pill-purple">Cash Flow Benefit Opportunity</span>
+        </div>
+      </div>
+
+      <!-- 7. Rule 37 (180 Days Non-payment Risk) -->
+      <div class="kpi-card rule37">
+        <div class="kpi-top">
+          <span class="kpi-label">180-Day Rule 37 Risk</span>
+          <div class="kpi-icon-wrap" style="color:#F59E0B">
+            <i data-lucide="clock" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiRule37Tax">₹0.00</div>
+        <div class="kpi-subtext">
+          <span class="kpi-pill pill-amber">Mandatory Reversal + Interest</span>
+        </div>
+      </div>
+
+      <!-- 8. Compliance Health Score -->
+      <div class="kpi-card score">
+        <div class="kpi-top">
+          <span class="kpi-label">ITC Reconciliation Health</span>
+          <div class="kpi-icon-wrap" style="color:#10B981">
+            <i data-lucide="activity" style="width:18px;height:18px"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiComplianceScore">0%</div>
+        <div class="kpi-subtext">
+          <span>% of Books ITC Verified in 2B</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- INTERACTIVE AUDIT CHARTS -->
+    <section class="insights-row" aria-label="Visual Analytics">
+      
+      <!-- Chart 1: Donut Status Breakdown -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">ITC Status Distribution</h3>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Part-wise categorization</span>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="itcBreakdownChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Bar Monthly Books vs 2B Trend -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Monthly ITC Comparison (April to March)</h3>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Books Claimed vs GSTR-2B Available</span>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- DETAILED RECONCILIATION TABLES PANEL -->
+    <section class="table-panel" aria-label="Reconciliation Invoices Detail">
+      
+      <!-- Tabs Bar -->
+      <nav class="tabs-header" aria-label="Reconciliation Sub-categories">
+        <button class="tab-btn active" data-tab="all">
+          <i data-lucide="layers" style="width:16px;height:16px"></i>
+          <span>All Invoices</span>
+          <span class="tab-count" id="countAll">0</span>
+        </button>
+        <button class="tab-btn" data-tab="matched">
+          <i data-lucide="check-circle" style="width:16px;height:16px;color:#10B981"></i>
+          <span>Exact Matched</span>
+          <span class="tab-count" id="countMatched">0</span>
+        </button>
+        <button class="tab-btn" data-tab="fuzzy">
+          <i data-lucide="help-circle" style="width:16px;height:16px;color:#06B6D4"></i>
+          <span>Probable Matched</span>
+          <span class="tab-count" id="countFuzzy">0</span>
+        </button>
+        <button class="tab-btn" data-tab="mismatch">
+          <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#F59E0B"></i>
+          <span>Value Mismatches</span>
+          <span class="tab-count" id="countMismatch">0</span>
+        </button>
+        <button class="tab-btn" data-tab="missing2b">
+          <i data-lucide="x-circle" style="width:16px;height:16px;color:#EF4444"></i>
+          <span>Missing in 2B (Risk)</span>
+          <span class="tab-count" id="countMissing2b">0</span>
+        </button>
+        <button class="tab-btn" data-tab="missingbooks">
+          <i data-lucide="file-plus" style="width:16px;height:16px;color:#8B5CF6"></i>
+          <span>Missing in Books (Unclaimed)</span>
+          <span class="tab-count" id="countMissingBooks">0</span>
+        </button>
+        <button class="tab-btn" data-tab="rule37">
+          <i data-lucide="hourglass" style="width:16px;height:16px;color:#F97316"></i>
+          <span>180-Day Rule 37</span>
+          <span class="tab-count" id="countRule37">0</span>
+        </button>
+        <button class="tab-btn" data-tab="journal">
+          <i data-lucide="edit-3" style="width:16px;height:16px;color:#A5B4FC"></i>
+          <span>Journal Adjustments</span>
+          <span class="tab-count" id="countJournal">0</span>
+        </button>
+        <button class="tab-btn" data-tab="vendors">
+          <i data-lucide="users" style="width:16px;height:16px;color:#38BDF8"></i>
+          <span>Vendor Action Center</span>
+          <span class="tab-count" id="countVendors">0</span>
+        </button>
+      </nav>
+
+      <!-- Table Filter & Search Controls -->
+      <div class="table-controls">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="tableSearchInput" placeholder="Search by GSTIN, Supplier Name, Invoice No...">
+        </div>
+        <div class="filter-group">
+          <select id="tableVendorFilter" class="select-filter">
+            <option value="all">All Suppliers / Vendors</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table Scroll Container -->
+      <div class="table-scroll">
+        <table class="data-table" id="reconDataTable">
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Table Footer -->
+      <div class="table-footer">
+        <span id="tableFooterCount">Showing 0 records</span>
+        <span style="color:var(--text-faint)">Indian GST Compliance Engine &bull; Section 16 & Rule 37 Standards</span>
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- VENDOR NOTICE / EMAIL & WHATSAPP MODAL -->
+  <div class="modal-overlay" id="noticeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="noticeModalTitle">Generate Supplier Statutory Notice</h3>
+        <button class="modal-close" id="modalCloseBtn" aria-label="Close modal">
+          <i data-lucide="x" style="width:20px;height:20px"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
+          Official statutory notice under Section 16(2)(aa) requesting supplier to upload missing invoices or correct GSTR-1 filings.
+        </p>
+        <div class="notice-preview-box" id="noticeContent"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="copyEmailNoticeBtn" class="btn btn-secondary">
+          <i data-lucide="copy" style="width:16px;height:16px"></i> Copy Email Notice
+        </button>
+        <button id="copyWhatsAppNoticeBtn" class="btn btn-primary">
+          <i data-lucide="message-circle" style="width:16px;height:16px"></i> Send via WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Logic Scripts -->
+  <script src="scripts/demo-data.js"></script>
+  <script src="scripts/parser.js"></script>
+  <script src="scripts/reconciler.js"></script>
+  <script src="scripts/exporter.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>
